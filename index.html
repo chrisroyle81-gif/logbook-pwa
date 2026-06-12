@@ -43,9 +43,6 @@
   .brand::before {
     content: '⊹'; color: var(--accent); margin-right: 8px;
   }
-  .meta {
-    font-size: 11px; color: var(--muted); letter-spacing: 0.1em;
-  }
   main {
     flex: 1; padding: 24px 20px; display: flex; flex-direction: column; gap: 16px;
     overflow-y: auto;
@@ -60,11 +57,10 @@
     cursor: pointer; transition: background 0.15s, border-color 0.15s;
   }
   .home button:active { background: var(--panel); border-left-color: var(--ink); }
-  .home button .label {
-    display: block; font-weight: 600; letter-spacing: 0.04em;
-  }
+  .home button .label { display: block; font-weight: 600; letter-spacing: 0.04em; }
   .home button .sub {
-    display: block; color: var(--muted); font-size: 12px; margin-top: 6px; letter-spacing: 0.08em; text-transform: uppercase;
+    display: block; color: var(--muted); font-size: 12px; margin-top: 6px;
+    letter-spacing: 0.08em; text-transform: uppercase;
   }
   .capture { display: none; flex-direction: column; gap: 14px; flex: 1; }
   .capture.active { display: flex; }
@@ -98,9 +94,7 @@
   .voice-display:empty::before {
     content: 'Listening…'; color: var(--muted); font-style: italic;
   }
-  .actions {
-    display: flex; gap: 10px;
-  }
+  .actions { display: flex; gap: 10px; }
   .actions button {
     flex: 1; padding: 16px; font: inherit; font-size: 14px;
     background: transparent; color: var(--ink);
@@ -111,6 +105,7 @@
     background: var(--accent); color: var(--bg); border-color: var(--accent);
     font-weight: 600;
   }
+  .actions button.danger { border-color: var(--bad); color: var(--bad); }
   .actions button:active { transform: translateY(1px); }
   .actions button:disabled { opacity: 0.4; }
   .toast {
@@ -130,9 +125,7 @@
     color: var(--muted); font-size: 11px; text-decoration: none;
     letter-spacing: 0.1em; text-transform: uppercase;
   }
-  .settings {
-    display: none; flex-direction: column; gap: 14px; flex: 1;
-  }
+  .settings { display: none; flex-direction: column; gap: 14px; flex: 1; }
   .settings.active { display: flex; }
   .settings label {
     display: flex; flex-direction: column; gap: 6px; font-size: 11px;
@@ -143,7 +136,15 @@
     padding: 12px; font: inherit; font-size: 14px; outline: none;
   }
   .settings input:focus { border-color: var(--accent-dim); }
-  .settings .hint { font-size: 11px; color: var(--muted); line-height: 1.6; text-transform: none; letter-spacing: 0; }
+  .settings .hint {
+    font-size: 11px; color: var(--muted); line-height: 1.6;
+    text-transform: none; letter-spacing: 0;
+  }
+  .settings .queue-line {
+    font-size: 11px; color: var(--muted); padding: 4px 0;
+    letter-spacing: 0.08em; text-transform: uppercase;
+  }
+  .settings .queue-line.has { color: var(--accent); }
 </style>
 </head>
 <body>
@@ -154,7 +155,6 @@
 </header>
 
 <main>
-  <!-- HOME -->
   <section class="home" id="home">
     <button id="btnTalk">
       <span class="label">Talk</span>
@@ -167,7 +167,6 @@
     <div class="queue" id="queueStatus"></div>
   </section>
 
-  <!-- CAPTURE -->
   <section class="capture" id="capture">
     <div class="field-meta">
       <span><span class="dot" id="modeDot"></span><span id="modeLabel"></span></span>
@@ -182,7 +181,6 @@
     </div>
   </section>
 
-  <!-- SETTINGS -->
   <section class="settings" id="settings">
     <label>
       Apps Script Web App URL
@@ -193,8 +191,10 @@
       <input type="text" id="cfgToken" placeholder="(matches SHARED_TOKEN in Code.gs)">
     </label>
     <p class="hint">Both values must match what's in your Apps Script. Stored locally in your browser only — never sent anywhere except your endpoint.</p>
+    <div class="queue-line" id="cfgQueueLine"></div>
     <div class="actions">
       <button id="cfgCancel">Back</button>
+      <button id="cfgClearQueue" class="danger">Clear queue</button>
       <button id="cfgSave" class="primary">Save</button>
     </div>
   </section>
@@ -218,10 +218,11 @@ const timeLabel = $('timeLabel'), toast = $('toast');
 const queueStatus = $('queueStatus');
 
 // ---------- STATE ----------
-let mode = null;           // 'talk' | 'type'
+let mode = null;
 let recognition = null;
-let finalText = '';
-let coords = null;         // {lat, lng} once available
+let finalText = '';       // total accepted text (committed + current session final)
+let committedText = '';   // text locked in from previous recognition sessions
+let coords = null;
 let timestampISO = null;
 
 // ---------- VIEWS ----------
@@ -234,6 +235,7 @@ function showHome() {
 function showCapture(m) {
   mode = m;
   finalText = '';
+  committedText = '';
   timestampISO = new Date().toISOString();
   home.style.display = 'none';
   capture.classList.add('active');
@@ -243,7 +245,6 @@ function showCapture(m) {
   modeDot.className = 'dot live';
   timeLabel.textContent = new Date().toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'});
 
-  // Get location
   locLabel.textContent = 'locating…';
   locDot.className = 'dot live';
   coords = null;
@@ -254,10 +255,7 @@ function showCapture(m) {
         locLabel.textContent = `${coords.lat.toFixed(4)}, ${coords.lng.toFixed(4)}`;
         locDot.className = 'dot ok';
       },
-      (err) => {
-        locLabel.textContent = 'no location';
-        locDot.className = 'dot err';
-      },
+      () => { locLabel.textContent = 'no location'; locDot.className = 'dot err'; },
       { enableHighAccuracy: true, timeout: 8000, maximumAge: 30000 }
     );
   } else {
@@ -283,6 +281,7 @@ function showSettings() {
   settings.classList.add('active');
   $('cfgUrl').value = localStorage.getItem(LS_URL) || '';
   $('cfgToken').value = localStorage.getItem(LS_TOKEN) || '';
+  updateCfgQueueLine();
 }
 
 // ---------- VOICE ----------
@@ -298,13 +297,18 @@ function startVoice() {
   recognition.lang = navigator.language || 'en-AU';
 
   recognition.onresult = (e) => {
+    // Rebuild from index 0 each event. Android Chrome re-emits previous finals
+    // on every event, so iterating from resultIndex and ADDING duplicates words.
+    let sessionFinal = '';
     let interim = '';
-    for (let i = e.resultIndex; i < e.results.length; i++) {
+    for (let i = 0; i < e.results.length; i++) {
       const r = e.results[i];
-      if (r.isFinal) finalText += r[0].transcript + ' ';
+      if (r.isFinal) sessionFinal += r[0].transcript + ' ';
       else interim += r[0].transcript;
     }
-    voiceDisplay.innerHTML = escapeHtml(finalText) + `<span class="interim">${escapeHtml(interim)}</span>`;
+    finalText = committedText + sessionFinal;
+    voiceDisplay.innerHTML = escapeHtml(finalText) +
+      `<span class="interim">${escapeHtml(interim)}</span>`;
     voiceDisplay.scrollTop = voiceDisplay.scrollHeight;
   };
   recognition.onerror = (e) => {
@@ -314,7 +318,9 @@ function startVoice() {
     }
   };
   recognition.onend = () => {
-    // auto-restart while we're still on the capture screen
+    // Lock in this session's output before potentially restarting — the next
+    // session's results[] starts empty, so without this we'd lose prior text.
+    committedText = finalText;
     if (mode === 'talk' && capture.classList.contains('active')) {
       try { recognition.start(); } catch(e) {}
     }
@@ -331,10 +337,7 @@ function stopVoice() {
 // ---------- SUBMIT ----------
 async function submit() {
   const content = mode === 'talk' ? finalText.trim() : typeInput.value.trim();
-  if (!content) {
-    showToast('Nothing to save', true);
-    return;
-  }
+  if (!content) { showToast('Nothing to save', true); return; }
   stopVoice();
   $('btnSubmit').disabled = true;
 
@@ -349,6 +352,8 @@ async function submit() {
   const ok = await sendPayload(payload);
   if (ok) {
     showToast('Saved');
+    // Now that we know the endpoint works, opportunistically drain any backlog.
+    flushQueue();
   } else {
     enqueue(payload);
     showToast('Offline — queued', true);
@@ -367,7 +372,6 @@ async function sendPayload(payload) {
   try {
     const res = await fetch(url, {
       method: 'POST',
-      // text/plain avoids the CORS preflight that Apps Script doesn't handle well
       headers: { 'Content-Type': 'text/plain;charset=utf-8' },
       body: JSON.stringify({ ...payload, token })
     });
@@ -379,7 +383,7 @@ async function sendPayload(payload) {
   }
 }
 
-// ---------- QUEUE (offline retry) ----------
+// ---------- QUEUE ----------
 function loadQueue() { try { return JSON.parse(localStorage.getItem(LS_QUEUE) || '[]'); } catch(e) { return []; } }
 function saveQueue(q) { localStorage.setItem(LS_QUEUE, JSON.stringify(q)); }
 function enqueue(p) { const q = loadQueue(); q.push(p); saveQueue(q); }
@@ -393,7 +397,9 @@ async function flushQueue() {
   }
   saveQueue(remaining);
   updateQueueStatus();
-  if (q.length && !remaining.length) showToast(`Flushed ${q.length} queued`);
+  updateCfgQueueLine();
+  const sent = q.length - remaining.length;
+  if (sent) showToast(`Flushed ${sent} queued`);
 }
 function updateQueueStatus() {
   const n = loadQueue().length;
@@ -403,6 +409,17 @@ function updateQueueStatus() {
   } else {
     queueStatus.textContent = '';
     queueStatus.classList.remove('has');
+  }
+}
+function updateCfgQueueLine() {
+  const n = loadQueue().length;
+  const el = $('cfgQueueLine');
+  if (n) {
+    el.textContent = `${n} entr${n===1?'y':'ies'} currently queued`;
+    el.classList.add('has');
+  } else {
+    el.textContent = 'No queued entries';
+    el.classList.remove('has');
   }
 }
 
@@ -434,21 +451,26 @@ $('cfgSave').addEventListener('click', () => {
   showToast('Saved');
   showHome();
 });
+$('cfgClearQueue').addEventListener('click', () => {
+  const n = loadQueue().length;
+  if (!n) { showToast('Queue is empty'); return; }
+  if (confirm(`Discard ${n} queued entr${n===1?'y':'ies'}? They will NOT be sent.`)) {
+    saveQueue([]);
+    updateCfgQueueLine();
+    showToast('Queue cleared');
+  }
+});
 
-// First-run: open settings if not configured
 window.addEventListener('load', () => {
   if (!localStorage.getItem(LS_URL) || !localStorage.getItem(LS_TOKEN)) {
     showSettings();
   } else {
     showHome();
-    flushQueue(); // try to flush anything queued from last session
+    flushQueue();
   }
 });
-
-// Re-flush when we regain network
 window.addEventListener('online', flushQueue);
 
-// Register service worker (optional, for installability + offline shell)
 if ('serviceWorker' in navigator) {
   navigator.serviceWorker.register('sw.js').catch(()=>{});
 }
