@@ -36,6 +36,333 @@
     padding: 18px 20px 12px;
     border-bottom: 1px solid var(--line);
     display: flex; align-items: baseline; justify-content: space-between;
+    flex-shrink: 0;
+  }
+  .brand {
+    font-weight: 600; letter-spacing: 0.18em; text-transform: uppercase; font-size: 13px;
+  }
+  .brand::before { content: '⊹'; color: var(--accent); margin-right: 8px; }
+  .settings-link {
+    color: var(--muted); font-size: 11px; text-decoration: none;
+    letter-spacing: 0.1em; text-transform: uppercase;
+  }
+  main {
+    flex: 1; padding: 16px 20px; display: flex; flex-direction: column; gap: 12px;
+    overflow-y: auto;
+  }
+  .field-meta {
+    display: flex; gap: 16px; font-size: 11px; color: var(--muted);
+    letter-spacing: 0.08em; text-transform: uppercase;
+    flex-shrink: 0;
+  }
+  .field-meta span { display: inline-flex; align-items: center; gap: 6px; }
+  .field-meta .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--muted); }
+  .field-meta .dot.live { background: var(--accent); animation: pulse 1.4s infinite; }
+  .field-meta .dot.ok { background: var(--good); }
+  .field-meta .dot.err { background: var(--bad); }
+  @keyframes pulse {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50% { opacity: 0.4; transform: scale(1.4); }
+  }
+  textarea {
+    flex: 1; min-height: 180px;
+    background: transparent; color: var(--ink); border: 1px solid var(--line);
+    padding: 14px; font: inherit; font-size: 17px; line-height: 1.55;
+    resize: none; outline: none;
+  }
+  textarea:focus { border-color: var(--accent-dim); }
+  .queue {
+    font-size: 11px; color: var(--muted); padding: 4px 0;
+    letter-spacing: 0.08em; text-transform: uppercase;
+    flex-shrink: 0;
+  }
+  .queue.has { color: var(--accent); }
+  .actions { display: flex; gap: 10px; flex-shrink: 0; }
+  .actions button {
+    flex: 1; padding: 16px; font: inherit; font-size: 14px;
+    background: transparent; color: var(--ink);
+    border: 1px solid var(--line); cursor: pointer;
+    letter-spacing: 0.1em; text-transform: uppercase;
+  }
+  .actions button.primary {
+    background: var(--accent); color: var(--bg); border-color: var(--accent);
+    font-weight: 600;
+  }
+  .actions button.primary[disabled] { background: var(--accent-dim); border-color: var(--accent-dim); }
+  .actions button.danger { border-color: var(--bad); color: var(--bad); }
+  .actions button:active { transform: translateY(1px); }
+  .actions button:disabled { opacity: 0.5; }
+  .toast {
+    position: fixed; left: 16px; right: 16px; bottom: calc(20px + env(safe-area-inset-bottom));
+    background: var(--bg); border: 1px solid var(--line); border-left: 3px solid var(--good);
+    padding: 14px 16px; font-size: 13px; letter-spacing: 0.05em;
+    transform: translateY(120%); transition: transform 0.3s; z-index: 100;
+  }
+  .toast.show { transform: translateY(0); }
+  .toast.err { border-left-color: var(--bad); }
+  .settings { display: none; flex-direction: column; gap: 14px; flex: 1; }
+  .settings.active { display: flex; }
+  .capture { display: flex; flex-direction: column; gap: 12px; flex: 1; }
+  .capture.hidden { display: none; }
+  .settings label {
+    display: flex; flex-direction: column; gap: 6px; font-size: 11px;
+    color: var(--muted); letter-spacing: 0.1em; text-transform: uppercase;
+  }
+  .settings input {
+    background: transparent; color: var(--ink); border: 1px solid var(--line);
+    padding: 12px; font: inherit; font-size: 14px; outline: none;
+  }
+  .settings input:focus { border-color: var(--accent-dim); }
+  .settings .hint {
+    font-size: 11px; color: var(--muted); line-height: 1.6;
+    text-transform: none; letter-spacing: 0;
+  }
+  .settings .queue-line {
+    font-size: 11px; color: var(--muted); padding: 4px 0;
+    letter-spacing: 0.08em; text-transform: uppercase;
+  }
+  .settings .queue-line.has { color: var(--accent); }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="brand">Logbook</div>
+  <a href="#" class="settings-link" id="settingsBtn">Setup</a>
+</header>
+
+<main>
+  <section class="capture" id="capture">
+    <div class="field-meta">
+      <span><span class="dot ok" id="locDot"></span><span id="locLabel">locating…</span></span>
+      <span id="timeLabel"></span>
+    </div>
+    <textarea id="typeInput" placeholder="…" autofocus></textarea>
+    <div class="queue" id="queueStatus"></div>
+    <div class="actions">
+      <button id="btnClear">Clear</button>
+      <button id="btnSubmit" class="primary">Save</button>
+    </div>
+  </section>
+
+  <section class="settings" id="settings">
+    <label>
+      Apps Script Web App URL
+      <input type="url" id="cfgUrl" placeholder="https://script.google.com/macros/s/…/exec">
+    </label>
+    <label>
+      Shared Token
+      <input type="text" id="cfgToken" placeholder="(matches SHARED_TOKEN in Code.gs)">
+    </label>
+    <p class="hint">Both values must match what's in your Apps Script. Stored locally in your browser only — never sent anywhere except your endpoint.</p>
+    <div class="queue-line" id="cfgQueueLine"></div>
+    <div class="actions">
+      <button id="cfgCancel">Back</button>
+      <button id="cfgClearQueue" class="danger">Clear queue</button>
+      <button id="cfgSave" class="primary">Save</button>
+    </div>
+  </section>
+</main>
+
+<div class="toast" id="toast"></div>
+
+<script>
+// ---------- CONFIG ----------
+const LS_URL = 'logbook.url';
+const LS_TOKEN = 'logbook.token';
+const LS_QUEUE = 'logbook.queue';
+
+// ---------- ELEMENTS ----------
+const $ = (id) => document.getElementById(id);
+const capture = $('capture'), settings = $('settings');
+const typeInput = $('typeInput');
+const locDot = $('locDot'), locLabel = $('locLabel');
+const timeLabel = $('timeLabel'), toast = $('toast');
+const queueStatus = $('queueStatus');
+
+// ---------- STATE ----------
+let coords = null;
+let timestampISO = null;
+
+// ---------- CAPTURE STATE ----------
+function resetCapture() {
+  timestampISO = new Date().toISOString();
+  timeLabel.textContent = new Date().toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'});
+  typeInput.value = '';
+
+  locLabel.textContent = 'locating…';
+  locDot.className = 'dot live';
+  coords = null;
+  if (navigator.geolocation) {
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        coords = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+        locLabel.textContent = `${coords.lat.toFixed(4)}, ${coords.lng.toFixed(4)}`;
+        locDot.className = 'dot ok';
+      },
+      () => { locLabel.textContent = 'no location'; locDot.className = 'dot err'; },
+      { enableHighAccuracy: true, timeout: 8000, maximumAge: 30000 }
+    );
+  } else {
+    locLabel.textContent = 'unsupported';
+    locDot.className = 'dot err';
+  }
+
+  updateQueueStatus();
+  setTimeout(() => typeInput.focus(), 50);
+}
+
+function showCapture() {
+  capture.classList.remove('hidden');
+  settings.classList.remove('active');
+  resetCapture();
+}
+function showSettings() {
+  capture.classList.add('hidden');
+  settings.classList.add('active');
+  $('cfgUrl').value = localStorage.getItem(LS_URL) || '';
+  $('cfgToken').value = localStorage.getItem(LS_TOKEN) || '';
+  updateCfgQueueLine();
+}
+
+// ---------- SUBMIT ----------
+async function submit() {
+  const content = typeInput.value.trim();
+  if (!content) { showToast('Nothing to save', true); return; }
+  $('btnSubmit').disabled = true;
+
+  const payload = {
+    ts: timestampISO,
+    lat: coords ? coords.lat : null,
+    lng: coords ? coords.lng : null,
+    content: content,
+    mode: 'type'
+  };
+
+  const ok = await sendPayload(payload);
+  if (ok) {
+    showToast('Saved');
+    flushQueue();
+  } else {
+    enqueue(payload);
+    showToast('Offline — queued', true);
+  }
+  $('btnSubmit').disabled = false;
+  resetCapture();
+}
+
+async function sendPayload(payload) {
+  const url = localStorage.getItem(LS_URL);
+  const token = localStorage.getItem(LS_TOKEN);
+  if (!url || !token) {
+    showToast('Set URL and token in Setup', true);
+    return false;
+  }
+  try {
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify({ ...payload, token })
+    });
+    if (!res.ok) return false;
+    const data = await res.json().catch(() => ({}));
+    return data.ok !== false;
+  } catch (e) {
+    return false;
+  }
+}
+
+// ---------- QUEUE ----------
+function loadQueue() { try { return JSON.parse(localStorage.getItem(LS_QUEUE) || '[]'); } catch(e) { return []; } }
+function saveQueue(q) { localStorage.setItem(LS_QUEUE, JSON.stringify(q)); }
+function enqueue(p) { const q = loadQueue(); q.push(p); saveQueue(q); }
+async function flushQueue() {
+  let q = loadQueue();
+  if (!q.length) return;
+  const remaining = [];
+  for (const p of q) {
+    const ok = await sendPayload(p);
+    if (!ok) remaining.push(p);
+  }
+  saveQueue(remaining);
+  updateQueueStatus();
+  updateCfgQueueLine();
+  const sent = q.length - remaining.length;
+  if (sent) showToast(`Flushed ${sent} queued`);
+}
+function updateQueueStatus() {
+  const n = loadQueue().length;
+  if (n) {
+    queueStatus.textContent = `${n} entr${n===1?'y':'ies'} queued — will retry on send`;
+    queueStatus.classList.add('has');
+  } else {
+    queueStatus.textContent = '';
+    queueStatus.classList.remove('has');
+  }
+}
+function updateCfgQueueLine() {
+  const n = loadQueue().length;
+  const el = $('cfgQueueLine');
+  if (n) {
+    el.textContent = `${n} entr${n===1?'y':'ies'} currently queued`;
+    el.classList.add('has');
+  } else {
+    el.textContent = 'No queued entries';
+    el.classList.remove('has');
+  }
+}
+
+// ---------- TOAST ----------
+let toastTimer = null;
+function showToast(msg, isErr) {
+  toast.textContent = msg;
+  toast.classList.toggle('err', !!isErr);
+  toast.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => toast.classList.remove('show'), 2400);
+}
+
+// ---------- WIRE UP ----------
+$('btnClear').addEventListener('click', () => {
+  typeInput.value = '';
+  typeInput.focus();
+});
+$('btnSubmit').addEventListener('click', submit);
+$('settingsBtn').addEventListener('click', (e) => { e.preventDefault(); showSettings(); });
+$('cfgCancel').addEventListener('click', showCapture);
+$('cfgSave').addEventListener('click', () => {
+  localStorage.setItem(LS_URL, $('cfgUrl').value.trim());
+  localStorage.setItem(LS_TOKEN, $('cfgToken').value.trim());
+  showToast('Saved');
+  showCapture();
+});
+$('cfgClearQueue').addEventListener('click', () => {
+  const n = loadQueue().length;
+  if (!n) { showToast('Queue is empty'); return; }
+  if (confirm(`Discard ${n} queued entr${n===1?'y':'ies'}? They will NOT be sent.`)) {
+    saveQueue([]);
+    updateCfgQueueLine();
+    showToast('Queue cleared');
+  }
+});
+
+window.addEventListener('load', () => {
+  if (!localStorage.getItem(LS_URL) || !localStorage.getItem(LS_TOKEN)) {
+    showSettings();
+  } else {
+    showCapture();
+    flushQueue();
+  }
+});
+window.addEventListener('online', flushQueue);
+
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('sw.js').catch(()=>{});
+}
+</script>
+</body>
+</html>    border-bottom: 1px solid var(--line);
+    display: flex; align-items: baseline; justify-content: space-between;
   }
   .brand {
     font-weight: 600; letter-spacing: 0.18em; text-transform: uppercase; font-size: 13px;
