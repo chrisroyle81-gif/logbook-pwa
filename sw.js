@@ -1,6 +1,6 @@
 // Logbook service worker — minimal app-shell cache.
 // Bump CACHE name when you change shell files so clients re-download.
-const CACHE = 'logbook-v2';
+const CACHE = 'logbook-v3';
 const SHELL = ['./', './index.html', './manifest.json'];
 
 self.addEventListener('install', (e) => {
@@ -34,7 +34,6 @@ self.addEventListener('fetch', (e) => {
     return;
   }
 
-  // Cache-first for other shell assets.
   e.respondWith(
     caches.match(e.request).then(cached => cached || fetch(e.request))
   );
