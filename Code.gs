@@ -16,7 +16,7 @@
 // ─── CONFIG ──────────────────────────────────────────────────────────────────
 
 const DOC_ID = '1HDEhHvKE20wKkCFxYFN8H3AHklDEA8-AjT_x6pijPpg'; // 2026 Master Notes
-const SHARED_TOKEN = 'CHANGE-ME-TO-SOMETHING-LONG-AND-RANDOM';  // also paste in PWA Setup
+const SHARED_TOKEN = '&^WK,C0[kQD.GA?%{PwT:l!<fIHvs`4"';  // also paste in PWA Setup
 const TIMEZONE = 'Australia/Sydney';
 
 // Known locations resolve first (matched by haversine distance).
