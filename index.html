@@ -182,14 +182,9 @@ const queueStatus = $('queueStatus');
 
 // ---------- STATE ----------
 let coords = null;
-let timestampISO = null;
 
 // ---------- CAPTURE STATE ----------
-function resetCapture() {
-  timestampISO = new Date().toISOString();
-  timeLabel.textContent = new Date().toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'});
-  typeInput.value = '';
-
+function refreshLocation() {
   locLabel.textContent = 'locating…';
   locDot.className = 'dot live';
   coords = null;
@@ -207,7 +202,16 @@ function resetCapture() {
     locLabel.textContent = 'unsupported';
     locDot.className = 'dot err';
   }
+}
 
+function refreshTimeDisplay() {
+  timeLabel.textContent = new Date().toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'});
+}
+
+function resetCapture() {
+  refreshTimeDisplay();
+  typeInput.value = '';
+  refreshLocation();
   updateQueueStatus();
   setTimeout(() => typeInput.focus(), 50);
 }
@@ -231,8 +235,13 @@ async function submit() {
   if (!content) { showToast('Nothing to save', true); return; }
   $('btnSubmit').disabled = true;
 
+  // Capture the timestamp at SAVE time, not open time. If the app sat in the
+  // background for hours, we want the time the user actually finished, not
+  // the time they first opened the keyboard.
+  const ts = new Date().toISOString();
+
   const payload = {
-    ts: timestampISO,
+    ts: ts,
     lat: coords ? coords.lat : null,
     lng: coords ? coords.lng : null,
     content: content,
@@ -355,6 +364,25 @@ window.addEventListener('load', () => {
   }
 });
 window.addEventListener('online', flushQueue);
+
+// When the PWA comes back to the foreground (user was on another app, screen
+// off, etc.), refresh the time display and re-fetch location so the meta line
+// reflects "now" rather than whenever the app was last interacted with.
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden) return;
+  if (capture.classList.contains('hidden')) return;
+  refreshTimeDisplay();
+  refreshLocation();
+});
+
+// Keep the displayed time current even if the user just sits with the app
+// open. The actual saved timestamp is captured at submit time regardless;
+// this is purely for the meta line to not look stale.
+setInterval(() => {
+  if (!document.hidden && !capture.classList.contains('hidden')) {
+    refreshTimeDisplay();
+  }
+}, 60000);
 
 if ('serviceWorker' in navigator) {
   navigator.serviceWorker.register('sw.js').catch(()=>{});
