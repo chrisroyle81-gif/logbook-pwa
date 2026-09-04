@@ -1,12 +1,14 @@
 {
   "name": "Logbook",
   "short_name": "Logbook",
-  "description": "Quick capture to master notes — voice or text, timestamped and located.",
+  "description": "Quick capture to master notes — timestamped and located.",
   "start_url": ".",
+  "scope": ".",
   "display": "standalone",
   "orientation": "portrait",
   "background_color": "#0e0e0c",
   "theme_color": "#0e0e0c",
+  "categories": ["productivity", "utilities"],
   "icons": [
     {
       "src": "icon-192.png",

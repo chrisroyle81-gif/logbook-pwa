@@ -2,218 +2,366 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no, interactive-widget=resizes-content">
 <meta name="theme-color" content="#0e0e0c">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <link rel="manifest" href="manifest.json">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&display=swap">
 <title>Logbook</title>
 <style>
   :root {
-    --bg: #0e0e0c;
-    --panel: #16161310;
-    --ink: #e8e4d8;
-    --muted: #8a857a;
-    --line: #2a2823;
-    --accent: #d9954a;
-    --accent-dim: #8a5e2c;
-    --bad: #c66060;
-    --good: #6a9a5a;
+    --bg:          #0e0e0c;
+    --bg-lift:     #121210;
+    --ink:         #e8e4d8;
+    --ink-dim:     #a8a294;
+    --muted:       #7e786c;
+    --line:        #26241f;
+    --line-lit:    #3b372e;
+    --accent:      #d9954a;
+    --accent-soft: rgba(217,149,74,0.13);
+    --accent-dim:  #8a5e2c;
+    --bad:         #c66060;
+    --good:        #7aa565;
+    --mono: 'JetBrains Mono', ui-monospace, 'SF Mono', 'Roboto Mono', Consolas, monospace;
+    --tight: 0.16em;
   }
+
   * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+
   html, body {
-    margin: 0; padding: 0; height: 100%;
+    margin: 0; padding: 0;
+    height: 100%; height: 100dvh;
     background: var(--bg); color: var(--ink);
-    font-family: 'JetBrains Mono', ui-monospace, 'SF Mono', Consolas, monospace;
+    font-family: var(--mono);
     font-size: 16px; line-height: 1.5;
     overscroll-behavior: none;
   }
   body {
     display: flex; flex-direction: column;
-    padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+    padding:
+      env(safe-area-inset-top) env(safe-area-inset-right)
+      env(safe-area-inset-bottom) env(safe-area-inset-left);
+    /* Hairline of warmth at the very top - reads as a lit edge, not a border. */
+    background-image: linear-gradient(180deg, rgba(217,149,74,0.055), transparent 220px);
   }
+
+  /* header */
   header {
-    padding: 18px 20px 12px;
+    padding: 16px 20px 13px;
     border-bottom: 1px solid var(--line);
-    display: flex; align-items: baseline; justify-content: space-between;
+    display: flex; align-items: center; justify-content: space-between;
     flex-shrink: 0;
   }
   .brand {
-    font-weight: 600; letter-spacing: 0.18em; text-transform: uppercase; font-size: 13px;
+    font-weight: 600; letter-spacing: var(--tight);
+    text-transform: uppercase; font-size: 13px;
+    display: inline-flex; align-items: center; gap: 9px;
   }
-  .brand::before { content: '⊹'; color: var(--accent); margin-right: 8px; }
+  .brand .mark {
+    color: var(--accent); font-size: 15px; line-height: 1;
+    transform: translateY(-0.5px);
+  }
   .settings-link {
-    color: var(--muted); font-size: 11px; text-decoration: none;
-    letter-spacing: 0.1em; text-transform: uppercase;
+    color: var(--muted); font-size: 10.5px; text-decoration: none;
+    letter-spacing: 0.13em; text-transform: uppercase;
+    padding: 7px 10px; margin: -7px -10px;
+    border-radius: 3px; transition: color 0.18s;
   }
+  .settings-link:active { color: var(--accent); }
+
+  /* main */
   main {
-    flex: 1; padding: 16px 20px; display: flex; flex-direction: column; gap: 12px;
-    overflow-y: auto;
+    flex: 1; min-height: 0;
+    padding: 14px 20px 16px;
+    display: flex; flex-direction: column;
   }
+  .capture, .settings { flex: 1; min-height: 0; flex-direction: column; }
+  .capture { display: flex; gap: 11px; }
+  .capture.hidden { display: none; }
+  .settings { display: none; gap: 15px; overflow-y: auto; }
+  .settings.active { display: flex; }
+
+  /* meta strip */
   .field-meta {
-    display: flex; gap: 16px; font-size: 11px; color: var(--muted);
-    letter-spacing: 0.08em; text-transform: uppercase;
-    flex-shrink: 0;
+    display: flex; align-items: center; gap: 14px;
+    font-size: 10.5px; color: var(--muted);
+    letter-spacing: 0.1em; text-transform: uppercase;
+    flex-shrink: 0; min-height: 14px;
   }
-  .field-meta span { display: inline-flex; align-items: center; gap: 6px; }
-  .field-meta .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--muted); }
-  .field-meta .dot.live { background: var(--accent); animation: pulse 1.4s infinite; }
-  .field-meta .dot.ok { background: var(--good); }
-  .field-meta .dot.err { background: var(--bad); }
+  .field-meta span.item { display: inline-flex; align-items: center; gap: 7px; min-width: 0; }
+  .field-meta .loc { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .field-meta .spacer { flex: 1; }
+  .field-meta .time { color: var(--ink-dim); letter-spacing: 0.12em; flex-shrink: 0; }
+  .dot {
+    width: 6px; height: 6px; border-radius: 50%;
+    background: var(--muted); flex-shrink: 0;
+  }
+  .dot.live { background: var(--accent); animation: pulse 1.4s infinite; }
+  .dot.ok   { background: var(--good); }
+  .dot.err  { background: var(--bad); }
   @keyframes pulse {
     0%, 100% { opacity: 1; transform: scale(1); }
-    50% { opacity: 0.4; transform: scale(1.4); }
+    50%      { opacity: 0.35; transform: scale(1.45); }
   }
+
+  /* textarea */
+  .composer { position: relative; flex: 1; min-height: 120px; display: flex; }
   textarea {
-    flex: 1; min-height: 180px;
-    background: transparent; color: var(--ink); border: 1px solid var(--line);
-    padding: 14px; font: inherit; font-size: 17px; line-height: 1.55;
+    flex: 1; width: 100%;
+    background: var(--bg-lift); color: var(--ink);
+    border: 1px solid var(--line); border-radius: 4px;
+    padding: 15px 15px 34px;
+    font: inherit; font-size: 17px; line-height: 1.6;
     resize: none; outline: none;
+    transition: border-color 0.2s, box-shadow 0.2s;
   }
-  textarea:focus { border-color: var(--accent-dim); }
-  .queue {
-    font-size: 11px; color: var(--muted); padding: 4px 0;
-    letter-spacing: 0.08em; text-transform: uppercase;
-    flex-shrink: 0;
+  textarea::placeholder { color: #5d584e; }
+  textarea:focus {
+    border-color: var(--accent-dim);
+    box-shadow: 0 0 0 1px var(--accent-soft), inset 0 0 34px rgba(217,149,74,0.035);
   }
-  .queue.has { color: var(--accent); }
-  .actions { display: flex; gap: 10px; flex-shrink: 0; }
-  .actions button {
-    flex: 1; padding: 16px; font: inherit; font-size: 14px;
-    background: transparent; color: var(--ink);
-    border: 1px solid var(--line); cursor: pointer;
-    letter-spacing: 0.1em; text-transform: uppercase;
+  /* Count sits inside the box, bottom-right - present but never in the way. */
+  .count {
+    position: absolute; right: 12px; bottom: 10px;
+    font-size: 10px; letter-spacing: 0.1em; color: #57524a;
+    pointer-events: none; transition: color 0.2s;
   }
-  .actions button.primary {
-    background: var(--accent); color: var(--bg); border-color: var(--accent);
-    font-weight: 600;
+  .count.big { color: var(--accent); }
+
+  /* status line */
+  .statusline {
+    display: flex; align-items: center; gap: 8px;
+    font-size: 10.5px; color: var(--muted);
+    letter-spacing: 0.09em; text-transform: uppercase;
+    flex-shrink: 0; min-height: 14px;
   }
-  .actions button.primary[disabled] { background: var(--accent-dim); border-color: var(--accent-dim); }
-  .actions button.danger { border-color: var(--bad); color: var(--bad); }
-  .actions button:active { transform: translateY(1px); }
-  .actions button:disabled { opacity: 0.5; }
+  .statusline.has { color: var(--accent); }
+
+  /* actions */
+  .actions { display: flex; gap: 9px; flex-shrink: 0; align-items: stretch; }
+  button {
+    font: inherit; font-size: 13px;
+    letter-spacing: 0.13em; text-transform: uppercase;
+    background: transparent; color: var(--ink-dim);
+    border: 1px solid var(--line); border-radius: 4px;
+    padding: 15px 14px; cursor: pointer;
+    transition: border-color 0.18s, color 0.18s, background 0.18s, opacity 0.18s;
+  }
+  button:active { transform: translateY(1px); }
+  button:disabled { opacity: 0.42; }
+  /* Clear is deliberately quiet: it is destructive and sits beside Save. */
+  .btn-ghost { flex: 0 0 auto; min-width: 86px; color: var(--muted); }
+  .btn-ghost:active { border-color: var(--line-lit); color: var(--ink-dim); }
+  .btn-primary {
+    position: relative; overflow: hidden;
+    flex: 1;
+    background: var(--accent); color: #17150f;
+    border-color: var(--accent); font-weight: 600;
+  }
+  .btn-primary:disabled {
+    background: var(--accent-dim); border-color: var(--accent-dim);
+    color: #1c1810; opacity: 1;
+  }
+  .btn-primary .bar {
+    position: absolute; left: 0; bottom: 0; height: 2px; width: 100%;
+    background: rgba(20,17,10,0.42);
+    transform: scaleX(0); transform-origin: left center;
+  }
+  .btn-primary.sending .bar { animation: creep 14s cubic-bezier(.1,.85,.25,1) forwards; }
+  @keyframes creep { to { transform: scaleX(0.97); } }
+  .btn-danger { border-color: rgba(198,96,96,0.45); color: var(--bad); }
+
+  /* toast */
   .toast {
-    position: fixed; left: 16px; right: 16px; bottom: calc(20px + env(safe-area-inset-bottom));
-    background: var(--bg); border: 1px solid var(--line); border-left: 3px solid var(--good);
-    padding: 14px 16px; font-size: 13px; letter-spacing: 0.05em;
-    transform: translateY(120%); transition: transform 0.3s; z-index: 100;
+    position: fixed;
+    left: max(16px, env(safe-area-inset-left));
+    right: max(16px, env(safe-area-inset-right));
+    /* Clears the action row instead of covering the Save button. */
+    bottom: calc(84px + env(safe-area-inset-bottom));
+    background: #131310; border: 1px solid var(--line);
+    border-left: 2px solid var(--good); border-radius: 4px;
+    padding: 13px 15px; font-size: 12.5px; letter-spacing: 0.04em;
+    color: var(--ink);
+    box-shadow: 0 10px 30px rgba(0,0,0,0.55);
+    opacity: 0; transform: translateY(14px);
+    transition: opacity 0.24s, transform 0.24s;
+    pointer-events: none; z-index: 100;
   }
-  .toast.show { transform: translateY(0); }
-  .toast.err { border-left-color: var(--bad); }
-  .settings { display: none; flex-direction: column; gap: 14px; flex: 1; }
-  .settings.active { display: flex; }
-  .capture { display: flex; flex-direction: column; gap: 12px; flex: 1; }
-  .capture.hidden { display: none; }
+  .toast.show { opacity: 1; transform: translateY(0); }
+  .toast.err  { border-left-color: var(--bad); }
+  .toast.warn { border-left-color: var(--accent); }
+
+  /* settings */
   .settings label {
-    display: flex; flex-direction: column; gap: 6px; font-size: 11px;
-    color: var(--muted); letter-spacing: 0.1em; text-transform: uppercase;
+    display: flex; flex-direction: column; gap: 7px; font-size: 10.5px;
+    color: var(--muted); letter-spacing: 0.13em; text-transform: uppercase;
   }
   .settings input {
-    background: transparent; color: var(--ink); border: 1px solid var(--line);
-    padding: 12px; font: inherit; font-size: 14px; outline: none;
+    background: var(--bg-lift); color: var(--ink);
+    border: 1px solid var(--line); border-radius: 4px;
+    padding: 13px; font: inherit; font-size: 14px; outline: none;
+    letter-spacing: 0; text-transform: none;
+    transition: border-color 0.2s, box-shadow 0.2s;
   }
-  .settings input:focus { border-color: var(--accent-dim); }
+  .settings input:focus {
+    border-color: var(--accent-dim);
+    box-shadow: 0 0 0 1px var(--accent-soft);
+  }
   .settings .hint {
-    font-size: 11px; color: var(--muted); line-height: 1.6;
-    text-transform: none; letter-spacing: 0;
+    font-size: 11.5px; color: var(--muted); line-height: 1.65;
+    text-transform: none; letter-spacing: 0; margin: 0;
   }
+  .settings .rule { height: 1px; background: var(--line); margin: 2px 0; }
   .settings .queue-line {
-    font-size: 11px; color: var(--muted); padding: 4px 0;
-    letter-spacing: 0.08em; text-transform: uppercase;
+    font-size: 10.5px; color: var(--muted);
+    letter-spacing: 0.09em; text-transform: uppercase;
   }
   .settings .queue-line.has { color: var(--accent); }
+  .settings .push { flex: 1; min-height: 8px; }
+  /* Sits directly under the queue count it acts on, rather than competing with
+     Back and Save for room in the footer row. */
+  .btn-block { width: 100%; padding: 13px 14px; font-size: 12px; }
+  .settings .actions button { flex: 1; white-space: nowrap; }
 </style>
 </head>
 <body>
 
 <header>
-  <div class="brand">Logbook</div>
+  <div class="brand"><span class="mark">&#8889;</span>Logbook</div>
   <a href="#" class="settings-link" id="settingsBtn">Setup</a>
 </header>
 
 <main>
   <section class="capture" id="capture">
     <div class="field-meta">
-      <span><span class="dot ok" id="locDot"></span><span id="locLabel">locating…</span></span>
-      <span id="timeLabel"></span>
+      <span class="item"><span class="dot ok" id="locDot"></span><span class="loc" id="locLabel">locating&hellip;</span></span>
+      <span class="spacer"></span>
+      <span class="item time" id="timeLabel"></span>
     </div>
-    <textarea id="typeInput" placeholder="…" autofocus></textarea>
-    <div class="queue" id="queueStatus"></div>
+
+    <div class="composer">
+      <textarea id="typeInput" placeholder="&hellip;" autofocus
+                enterkeyhint="enter" autocapitalize="sentences"
+                autocomplete="off" autocorrect="on" spellcheck="true"></textarea>
+      <div class="count" id="count"></div>
+    </div>
+
+    <div class="statusline" id="queueStatus"></div>
+
     <div class="actions">
-      <button id="btnClear">Clear</button>
-      <button id="btnSubmit" class="primary">Save</button>
+      <button id="btnClear" class="btn-ghost">Clear</button>
+      <button id="btnSubmit" class="btn-primary"><span id="btnSubmitLabel">Save</span><span class="bar"></span></button>
     </div>
   </section>
 
   <section class="settings" id="settings">
     <label>
       Apps Script Web App URL
-      <input type="url" id="cfgUrl" placeholder="https://script.google.com/macros/s/…/exec">
+      <input type="url" id="cfgUrl" inputmode="url" autocomplete="off"
+             autocapitalize="off" spellcheck="false"
+             placeholder="https://script.google.com/macros/s/&hellip;/exec">
     </label>
     <label>
       Shared Token
-      <input type="text" id="cfgToken" placeholder="(matches SHARED_TOKEN in Code.gs)">
+      <input type="text" id="cfgToken" autocomplete="off"
+             autocapitalize="off" spellcheck="false"
+             placeholder="(matches SHARED_TOKEN in Code.gs)">
     </label>
-    <p class="hint">Both values must match what's in your Apps Script. Stored locally in your browser only — never sent anywhere except your endpoint.</p>
+    <p class="hint">Both values must match what&rsquo;s in your Apps Script. Stored locally in this browser only &mdash; never sent anywhere except your endpoint.</p>
+    <div class="rule"></div>
     <div class="queue-line" id="cfgQueueLine"></div>
+    <p class="hint">Queued entries retry automatically whenever you save or come back online. Clearing the queue discards them permanently.</p>
+    <button id="cfgClearQueue" class="btn-danger btn-block">Clear queue</button>
+    <div class="push"></div>
     <div class="actions">
-      <button id="cfgCancel">Back</button>
-      <button id="cfgClearQueue" class="danger">Clear queue</button>
-      <button id="cfgSave" class="primary">Save</button>
+      <button id="cfgCancel" class="btn-ghost">Back</button>
+      <button id="cfgSave" class="btn-primary">Save</button>
     </div>
   </section>
 </main>
 
-<div class="toast" id="toast"></div>
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
 
 <script>
 // ---------- CONFIG ----------
-const LS_URL = 'logbook.url';
-const LS_TOKEN = 'logbook.token';
-const LS_QUEUE = 'logbook.queue';
+var LS_URL   = 'logbook.url';
+var LS_TOKEN = 'logbook.token';
+var LS_QUEUE = 'logbook.queue';
+
+// Entries longer than this get a visual heads-up: they take the Apps Script
+// noticeably longer to append, which is exactly when a send is most likely to
+// outlive the connection. The id-based dedupe below makes that safe, but the
+// user should still know why the button is sitting on "Sending".
+var BIG_ENTRY = 3000;
 
 // ---------- ELEMENTS ----------
-const $ = (id) => document.getElementById(id);
-const capture = $('capture'), settings = $('settings');
-const typeInput = $('typeInput');
-const locDot = $('locDot'), locLabel = $('locLabel');
-const timeLabel = $('timeLabel'), toast = $('toast');
-const queueStatus = $('queueStatus');
+function $(id) { return document.getElementById(id); }
+var capture = $('capture'), settings = $('settings');
+var typeInput = $('typeInput');
+var locDot = $('locDot'), locLabel = $('locLabel');
+var timeLabel = $('timeLabel'), toast = $('toast');
+var queueStatus = $('queueStatus');
+var btnSubmit = $('btnSubmit'), btnSubmitLabel = $('btnSubmitLabel');
+var countEl = $('count');
 
 // ---------- STATE ----------
-let coords = null;
+var coords = null;
+var flushing = false;   // re-entrancy guard - see flushQueue()
+
+// ---------- IDS ----------
+// One id per entry, minted at compose time and preserved across every retry.
+// The server keeps a short memory of ids it has already written, so a reply
+// lost in transit can be retried without the entry landing in the doc twice.
+function newId() {
+  try {
+    if (window.crypto && crypto.randomUUID) return crypto.randomUUID();
+  } catch (e) { /* fall through */ }
+  return 'x' + Date.now().toString(36) + '-' +
+         Math.random().toString(36).slice(2, 10) +
+         Math.random().toString(36).slice(2, 10);
+}
 
 // ---------- CAPTURE STATE ----------
 function refreshLocation() {
   locLabel.textContent = 'locating…';
   locDot.className = 'dot live';
   coords = null;
-  if (navigator.geolocation) {
-    navigator.geolocation.getCurrentPosition(
-      (pos) => {
-        coords = { lat: pos.coords.latitude, lng: pos.coords.longitude };
-        locLabel.textContent = `${coords.lat.toFixed(4)}, ${coords.lng.toFixed(4)}`;
-        locDot.className = 'dot ok';
-      },
-      () => { locLabel.textContent = 'no location'; locDot.className = 'dot err'; },
-      { enableHighAccuracy: true, timeout: 8000, maximumAge: 30000 }
-    );
-  } else {
+  if (!navigator.geolocation) {
     locLabel.textContent = 'unsupported';
     locDot.className = 'dot err';
+    return;
   }
+  navigator.geolocation.getCurrentPosition(
+    function (pos) {
+      coords = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+      locLabel.textContent = coords.lat.toFixed(4) + ', ' + coords.lng.toFixed(4);
+      locDot.className = 'dot ok';
+    },
+    function () { locLabel.textContent = 'no location'; locDot.className = 'dot err'; },
+    { enableHighAccuracy: true, timeout: 8000, maximumAge: 30000 }
+  );
 }
 
 function refreshTimeDisplay() {
-  timeLabel.textContent = new Date().toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'});
+  timeLabel.textContent = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+}
+
+function updateCount() {
+  var n = typeInput.value.length;
+  countEl.textContent = n ? String(n) : '';
+  countEl.classList.toggle('big', n >= BIG_ENTRY);
 }
 
 function resetCapture() {
   refreshTimeDisplay();
   typeInput.value = '';
+  updateCount();
   refreshLocation();
   updateQueueStatus();
-  setTimeout(() => typeInput.focus(), 50);
+  setTimeout(function () { typeInput.focus(); }, 50);
 }
 
 function showCapture() {
@@ -229,80 +377,154 @@ function showSettings() {
   updateCfgQueueLine();
 }
 
+function setSending(on) {
+  btnSubmit.disabled = on;
+  btnSubmit.classList.toggle('sending', on);
+  btnSubmitLabel.textContent = on ? 'Sending' : 'Save';
+}
+
 // ---------- SUBMIT ----------
-async function submit() {
-  const content = typeInput.value.trim();
-  if (!content) { showToast('Nothing to save', true); return; }
-  $('btnSubmit').disabled = true;
+// Outbox pattern: the entry is written to the durable queue BEFORE any network
+// call, and only ever removed once the server has confirmed it. The old flow
+// (send first, queue on failure) could not tell "never arrived" apart from
+// "arrived, was written, reply lost" - and retried both, which is how a slow
+// large entry ended up in the doc twice.
+function submit() {
+  var content = typeInput.value.trim();
+  if (!content) { showToast('Nothing to save', 'err'); return; }
 
-  // Capture the timestamp at SAVE time, not open time. If the app sat in the
-  // background for hours, we want the time the user actually finished, not
-  // the time they first opened the keyboard.
-  const ts = new Date().toISOString();
+  var url = localStorage.getItem(LS_URL);
+  var token = localStorage.getItem(LS_TOKEN);
+  if (!url || !token) { showToast('Set URL and token in Setup', 'err'); showSettings(); return; }
 
-  const payload = {
-    ts: ts,
+  // Timestamp captured at SAVE time, not open time. If the app sat in the
+  // background for hours we want the moment the user actually finished.
+  var payload = {
+    id: newId(),
+    ts: new Date().toISOString(),
     lat: coords ? coords.lat : null,
     lng: coords ? coords.lng : null,
     content: content,
     mode: 'type'
   };
 
-  const ok = await sendPayload(payload);
-  if (ok) {
-    showToast('Saved');
-    flushQueue();
-  } else {
-    enqueue(payload);
-    showToast('Offline — queued', true);
-  }
-  $('btnSubmit').disabled = false;
-  resetCapture();
+  enqueue(payload);          // durable first - a crash here loses nothing
+  typeInput.value = '';      // safe to clear: it is in the queue
+  updateCount();
+  updateQueueStatus();
+
+  setSending(true);
+  return flushQueue({ silent: true }).then(function (res) {
+    setSending(false);
+    if (res.sent > 0 && res.remaining === 0) {
+      showToast(res.dupes ? 'Saved (already had it)' : 'Saved', 'good');
+    } else if (res.remaining > 0) {
+      showToast(res.lastError === 'auth'
+        ? 'Rejected — check token in Setup'
+        : 'Offline — queued, will retry', 'warn');
+    }
+    resetCapture();
+  });
 }
 
-async function sendPayload(payload) {
-  const url = localStorage.getItem(LS_URL);
-  const token = localStorage.getItem(LS_TOKEN);
-  if (!url || !token) {
-    showToast('Set URL and token in Setup', true);
-    return false;
-  }
-  try {
-    const res = await fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-      body: JSON.stringify({ ...payload, token })
+// Resolves to { ok, duplicate, error, fatal } - never throws.
+function sendPayload(payload) {
+  var url = localStorage.getItem(LS_URL);
+  var token = localStorage.getItem(LS_TOKEN);
+  if (!url || !token) return Promise.resolve({ ok: false, error: 'unconfigured' });
+
+  var body = {};
+  for (var k in payload) if (Object.prototype.hasOwnProperty.call(payload, k)) body[k] = payload[k];
+  body.token = token;
+
+  return fetch(url, {
+    method: 'POST',
+    // text/plain dodges the CORS preflight that Apps Script cannot answer.
+    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+    body: JSON.stringify(body)
+  }).then(function (res) {
+    if (!res.ok) return { ok: false, error: 'http' };
+    return res.json().catch(function () { return {}; }).then(function (data) {
+      if (data.ok === false) {
+        // Refused. Report WHY so the toast can point at Setup, but never treat
+        // it as final: a wrong token is a fixable mistake, and discarding the
+        // entry would throw away writing the user cannot get back. Entries only
+        // ever leave the queue on a confirmed write, or via Clear queue.
+        var auth = /token/i.test(String(data.error || ''));
+        return { ok: false, error: auth ? 'auth' : 'server' };
+      }
+      return { ok: true, duplicate: !!data.duplicate };
     });
-    if (!res.ok) return false;
-    const data = await res.json().catch(() => ({}));
-    return data.ok !== false;
-  } catch (e) {
-    return false;
-  }
+  }).catch(function () {
+    return { ok: false, error: 'network' };
+  });
 }
 
 // ---------- QUEUE ----------
-function loadQueue() { try { return JSON.parse(localStorage.getItem(LS_QUEUE) || '[]'); } catch(e) { return []; } }
-function saveQueue(q) { localStorage.setItem(LS_QUEUE, JSON.stringify(q)); }
-function enqueue(p) { const q = loadQueue(); q.push(p); saveQueue(q); }
-async function flushQueue() {
-  let q = loadQueue();
-  if (!q.length) return;
-  const remaining = [];
-  for (const p of q) {
-    const ok = await sendPayload(p);
-    if (!ok) remaining.push(p);
-  }
-  saveQueue(remaining);
-  updateQueueStatus();
-  updateCfgQueueLine();
-  const sent = q.length - remaining.length;
-  if (sent) showToast(`Flushed ${sent} queued`);
+function loadQueue() {
+  try { return JSON.parse(localStorage.getItem(LS_QUEUE) || '[]'); } catch (e) { return []; }
 }
+function saveQueue(q) {
+  try { localStorage.setItem(LS_QUEUE, JSON.stringify(q)); } catch (e) { /* quota */ }
+}
+function enqueue(p) { var q = loadQueue(); q.push(p); saveQueue(q); }
+
+// Guarded against overlapping runs. Previously `online`, page load and a
+// post-save flush could all be in the loop at once: each took its own snapshot
+// of the queue, each sent every item, and the last writer hid the evidence.
+function flushQueue(opts) {
+  opts = opts || {};
+  if (flushing) {
+    return Promise.resolve({ sent: 0, remaining: loadQueue().length, dupes: 0, skipped: true });
+  }
+  flushing = true;
+
+  var batch = loadQueue();
+  if (!batch.length) {
+    flushing = false;
+    return Promise.resolve({ sent: 0, remaining: 0, dupes: 0 });
+  }
+
+  var doneIds = Object.create(null);
+  var sent = 0, dupes = 0, lastError = null;
+  var i = 0;
+
+  function step() {
+    if (i >= batch.length) return Promise.resolve();
+    var p = batch[i++];
+    return sendPayload(p).then(function (r) {
+      if (r.ok) {
+        doneIds[p.id] = true;
+        sent++;
+        if (r.duplicate) dupes++;
+      } else {
+        lastError = r.error;
+        // Nothing transient will fix itself within this batch - stop early
+        // rather than replaying the same failure against every entry.
+        if (r.error === 'network' || r.error === 'unconfigured' || r.error === 'auth') return;
+      }
+      return step();
+    });
+  }
+
+  return step().then(function () {
+    // Re-read rather than writing back the snapshot: an entry saved while this
+    // loop was awaiting must not be erased.
+    var remaining = loadQueue().filter(function (p) { return !doneIds[p.id]; });
+    saveQueue(remaining);
+    updateQueueStatus();
+    updateCfgQueueLine();
+    if (sent && !opts.silent) showToast('Sent ' + sent + ' queued', 'good');
+    return { sent: sent, remaining: remaining.length, dupes: dupes, lastError: lastError };
+  }).finally(function () {
+    flushing = false;
+  });
+}
+
 function updateQueueStatus() {
-  const n = loadQueue().length;
+  var n = loadQueue().length;
   if (n) {
-    queueStatus.textContent = `${n} entr${n===1?'y':'ies'} queued — will retry on send`;
+    queueStatus.textContent = n + ' entr' + (n === 1 ? 'y' : 'ies') + ' queued — will retry on send';
     queueStatus.classList.add('has');
   } else {
     queueStatus.textContent = '';
@@ -310,10 +532,11 @@ function updateQueueStatus() {
   }
 }
 function updateCfgQueueLine() {
-  const n = loadQueue().length;
-  const el = $('cfgQueueLine');
+  var n = loadQueue().length;
+  var el = $('cfgQueueLine');
+  if (!el) return;
   if (n) {
-    el.textContent = `${n} entr${n===1?'y':'ies'} currently queued`;
+    el.textContent = n + ' entr' + (n === 1 ? 'y' : 'ies') + ' currently queued';
     el.classList.add('has');
   } else {
     el.textContent = 'No queued entries';
@@ -322,40 +545,50 @@ function updateCfgQueueLine() {
 }
 
 // ---------- TOAST ----------
-let toastTimer = null;
-function showToast(msg, isErr) {
+var toastTimer = null;
+function showToast(msg, kind) {
   toast.textContent = msg;
-  toast.classList.toggle('err', !!isErr);
+  toast.classList.remove('err', 'warn');
+  if (kind === 'err') toast.classList.add('err');
+  if (kind === 'warn') toast.classList.add('warn');
   toast.classList.add('show');
   clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => toast.classList.remove('show'), 2400);
+  toastTimer = setTimeout(function () { toast.classList.remove('show'); }, 2600);
 }
 
 // ---------- WIRE UP ----------
-$('btnClear').addEventListener('click', () => {
+typeInput.addEventListener('input', updateCount);
+
+$('btnClear').addEventListener('click', function () {
+  if (typeInput.value.length >= BIG_ENTRY) {
+    if (!confirm('Discard this entry? It has not been saved.')) return;
+  }
   typeInput.value = '';
+  updateCount();
   typeInput.focus();
 });
-$('btnSubmit').addEventListener('click', submit);
-$('settingsBtn').addEventListener('click', (e) => { e.preventDefault(); showSettings(); });
+btnSubmit.addEventListener('click', submit);
+$('settingsBtn').addEventListener('click', function (e) { e.preventDefault(); showSettings(); });
 $('cfgCancel').addEventListener('click', showCapture);
-$('cfgSave').addEventListener('click', () => {
+$('cfgSave').addEventListener('click', function () {
   localStorage.setItem(LS_URL, $('cfgUrl').value.trim());
   localStorage.setItem(LS_TOKEN, $('cfgToken').value.trim());
-  showToast('Saved');
+  showToast('Settings saved', 'good');
   showCapture();
+  flushQueue();
 });
-$('cfgClearQueue').addEventListener('click', () => {
-  const n = loadQueue().length;
+$('cfgClearQueue').addEventListener('click', function () {
+  var n = loadQueue().length;
   if (!n) { showToast('Queue is empty'); return; }
-  if (confirm(`Discard ${n} queued entr${n===1?'y':'ies'}? They will NOT be sent.`)) {
+  if (confirm('Discard ' + n + ' entr' + (n === 1 ? 'y' : 'ies') + '? They will NOT be sent.')) {
     saveQueue([]);
     updateCfgQueueLine();
-    showToast('Queue cleared');
+    updateQueueStatus();
+    showToast('Queue cleared', 'warn');
   }
 });
 
-window.addEventListener('load', () => {
+window.addEventListener('load', function () {
   if (!localStorage.getItem(LS_URL) || !localStorage.getItem(LS_TOKEN)) {
     showSettings();
   } else {
@@ -363,29 +596,26 @@ window.addEventListener('load', () => {
     flushQueue();
   }
 });
-window.addEventListener('online', flushQueue);
+window.addEventListener('online', function () { flushQueue(); });
 
-// When the PWA comes back to the foreground (user was on another app, screen
-// off, etc.), refresh the time display and re-fetch location so the meta line
-// reflects "now" rather than whenever the app was last interacted with.
-document.addEventListener('visibilitychange', () => {
+// When the PWA comes back to the foreground, refresh the time display and
+// re-fetch location so the meta line reflects "now", and retry anything queued.
+document.addEventListener('visibilitychange', function () {
   if (document.hidden) return;
   if (capture.classList.contains('hidden')) return;
   refreshTimeDisplay();
   refreshLocation();
+  flushQueue();
 });
 
-// Keep the displayed time current even if the user just sits with the app
-// open. The actual saved timestamp is captured at submit time regardless;
-// this is purely for the meta line to not look stale.
-setInterval(() => {
-  if (!document.hidden && !capture.classList.contains('hidden')) {
-    refreshTimeDisplay();
-  }
+// Keep the displayed time current if the app just sits open. The saved
+// timestamp is captured at submit time regardless; this is only cosmetic.
+setInterval(function () {
+  if (!document.hidden && !capture.classList.contains('hidden')) refreshTimeDisplay();
 }, 60000);
 
 if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.register('sw.js').catch(()=>{});
+  navigator.serviceWorker.register('sw.js').catch(function () {});
 }
 </script>
 </body>
