@@ -102,6 +102,8 @@
   .dot.live { background: var(--accent); animation: pulse 1.4s infinite; }
   .dot.ok   { background: var(--good); }
   .dot.err  { background: var(--bad); }
+  /* Pinned place: a ring rather than a filled dot, so it never reads as a GPS fix. */
+  .dot.pin  { background: transparent; box-shadow: inset 0 0 0 1.5px var(--accent); }
   @keyframes pulse {
     0%, 100% { opacity: 1; transform: scale(1); }
     50%      { opacity: 0.35; transform: scale(1.45); }
@@ -272,6 +274,14 @@
     </label>
     <p class="hint">Both values must match what&rsquo;s in your Apps Script. Stored locally in this browser only &mdash; never sent anywhere except your endpoint.</p>
     <div class="rule"></div>
+    <label>
+      Pinned location (this device only)
+      <input type="text" id="cfgPlace" autocomplete="off"
+             autocapitalize="words" spellcheck="false" maxlength="60"
+             placeholder="blank = use GPS">
+    </label>
+    <p class="hint">For a computer without GPS, whose location guess can be a suburb out. Write it the way the phone would, e.g. <em>Glenfield, NSW</em>, so entries match whichever device you use. Leave blank on the phone.</p>
+    <div class="rule"></div>
     <div class="queue-line" id="cfgQueueLine"></div>
     <p class="hint">Queued entries retry automatically whenever you save or come back online. Clearing the queue discards them permanently.</p>
     <button id="cfgClearQueue" class="btn-danger btn-block">Clear queue</button>
@@ -290,6 +300,9 @@
 var LS_URL   = 'logbook.url';
 var LS_TOKEN = 'logbook.token';
 var LS_QUEUE = 'logbook.queue';
+var LS_PLACE = 'logbook.place';   // per-device pinned location, '' = use GPS
+
+function pinnedPlace() { return (localStorage.getItem(LS_PLACE) || '').trim(); }
 
 // Entries longer than this get a visual heads-up: they take the Apps Script
 // noticeably longer to append, which is exactly when a send is most likely to
@@ -326,21 +339,33 @@ function newId() {
 
 // ---------- CAPTURE STATE ----------
 function refreshLocation() {
-  locLabel.textContent = 'locating…';
-  locDot.className = 'dot live';
+  var pin = pinnedPlace();
   coords = null;
+  if (pin) {
+    // The pin is what gets written, so it is what the strip shows.
+    locLabel.textContent = pin;
+    locDot.className = 'dot pin';
+  } else {
+    locLabel.textContent = 'locating…';
+    locDot.className = 'dot live';
+  }
   if (!navigator.geolocation) {
-    locLabel.textContent = 'unsupported';
-    locDot.className = 'dot err';
+    if (!pin) { locLabel.textContent = 'unsupported'; locDot.className = 'dot err'; }
     return;
   }
+  // Coords are still gathered when pinned: they ride along so a server that
+  // predates pinning falls back to geocoding instead of writing 'unknown'.
   navigator.geolocation.getCurrentPosition(
     function (pos) {
       coords = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+      if (pinnedPlace()) return;
       locLabel.textContent = coords.lat.toFixed(4) + ', ' + coords.lng.toFixed(4);
       locDot.className = 'dot ok';
     },
-    function () { locLabel.textContent = 'no location'; locDot.className = 'dot err'; },
+    function () {
+      if (pinnedPlace()) return;
+      locLabel.textContent = 'no location'; locDot.className = 'dot err';
+    },
     { enableHighAccuracy: true, timeout: 8000, maximumAge: 30000 }
   );
 }
@@ -374,6 +399,7 @@ function showSettings() {
   settings.classList.add('active');
   $('cfgUrl').value = localStorage.getItem(LS_URL) || '';
   $('cfgToken').value = localStorage.getItem(LS_TOKEN) || '';
+  $('cfgPlace').value = pinnedPlace();
   updateCfgQueueLine();
 }
 
@@ -404,11 +430,14 @@ function submit() {
     ts: new Date().toISOString(),
     lat: coords ? coords.lat : null,
     lng: coords ? coords.lng : null,
+    // Captured at save time like the timestamp, so a queued entry keeps the
+    // place it was written at even if Setup changes before it is sent.
+    place: pinnedPlace() || null,
     content: content,
     mode: 'type'
   };
 
-  enqueue(payload);          // durable first - a crash here loses nothing
+  enqueue(payload);         // durable first - a crash here loses nothing
   typeInput.value = '';      // safe to clear: it is in the queue
   updateCount();
   updateQueueStatus();
@@ -573,6 +602,7 @@ $('cfgCancel').addEventListener('click', showCapture);
 $('cfgSave').addEventListener('click', function () {
   localStorage.setItem(LS_URL, $('cfgUrl').value.trim());
   localStorage.setItem(LS_TOKEN, $('cfgToken').value.trim());
+  localStorage.setItem(LS_PLACE, $('cfgPlace').value.replace(/\s+/g, ' ').trim());
   showToast('Settings saved', 'good');
   showCapture();
   flushQueue();
